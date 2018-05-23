@@ -1,2 +1,0 @@
-# min   hour  day   month   weekday   command
-*       *     *     *       *         entrypoint.sh backup

@@ -68,8 +68,10 @@ function init {
 
   done
 
-  log "Cron daemon started"
+  log "Setup cron tasks"
+  echo "* * * * * entrypoint.sh backup" > /var/spool/cron/crontabs/root
 
+  log "Start cron daemon"
   crond -L /dev/null -f
 
 }

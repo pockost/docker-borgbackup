@@ -8,6 +8,4 @@ RUN apk add --no-cache tzdata borgbackup bash lftp \
 
 COPY entrypoint.sh /usr/local/bin/
 
-COPY cronjob /var/spool/cron/crontabs/root
-
 ENTRYPOINT ["entrypoint.sh"]
