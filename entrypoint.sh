@@ -30,6 +30,11 @@ function check_requirements {
     exit
   fi
 
+  if [ -z $CRON_DELAY ]; then
+    log "You need to specify CRON_DELAY" error
+    exit
+  fi
+
 }
 
 function init {
@@ -69,7 +74,7 @@ function init {
   done
 
   log "Setup cron tasks"
-  echo "* * * * * entrypoint.sh backup" > /var/spool/cron/crontabs/root
+  echo "$CRON_DELAY entrypoint.sh backup" > /var/spool/cron/crontabs/root
 
   log "Start cron daemon"
   crond -L /dev/null -f
@@ -97,7 +102,7 @@ function backup {
   lftp ftp://auto:@$LFTP_TARGET -e "mirror -e -R $BORG_TARGET / ; quit" &> /dev/null
 
   if [ ! $? ]; then
-    log "Syncronize backups with $LFTP_TARGET"
+    log "Synchronize backups with $LFTP_TARGET"
   else
     log "Impossible to synchronize backups with $LFTP_TARGET" error
   fi
