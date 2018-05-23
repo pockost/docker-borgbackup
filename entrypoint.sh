@@ -10,27 +10,27 @@ function log {
 
 function check_requirements {
 
-  if [ -z $BORG_PASSPHRASE ]; then
+  if [ -z "$BORG_PASSPHRASE" ]; then
     log "You need to specify BORG_PASSPHRASE" error
     exit
   fi
 
-  if [ -z $BORG_TARGET ]; then
+  if [ -z "$BORG_TARGET" ]; then
     log "You need to specify BORG_TARGET" error
     exit
   fi
 
-  if [ -z $BORG_SOURCES ]; then
+  if [ -z "$BORG_SOURCES" ]; then
     log "You need to specify BORG_SOURCES" error
     exit
   fi
 
-  if [ -z $LFTP_TARGET ]; then
+  if [ -z "$LFTP_TARGET" ]; then
     log "You need to specify LFTP_TARGET" error
     exit
   fi
 
-  if [ -z $CRON_DELAY ]; then
+  if [ -z "$CRON_DELAY" ]; then
     log "You need to specify CRON_DELAY" error
     exit
   fi
