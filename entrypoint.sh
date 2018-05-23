@@ -1,29 +1,111 @@
 #!/bin/bash
 
-BORG_PASSPHRASE="pockost"
-BORG_TARGET="/backup"
-BORG_SOURCES=""
+function log {
 
-# Parse env var to get all sources
-IFS=', ' read -r -a borg_sources <<< $BORG_SOURCES
+  [[ -z $2 ]] && type="info" || type="$2"
 
-# Loop over list of sources
-for element in "${borg_sources[@]}"
-do
+  echo "time=\"$(date '+%m/%d/%Y %H:%M:%S')\" level=$type msg=\"$1\""
 
-  # Extract directory name from path
-  basename=$(basename $element)
+}
 
-  # Check if the repositoy exists
-  if [ ! -d "/backup/$basename" ]; then
+function check_requirements {
 
-    BORG_PASSPHRASE=$BORG_PASSPHRASE borg init --encryption=repokey-blake2 /backup/$basename
-    echo "create"
-
+  if [ -z $BORG_PASSPHRASE ]; then
+    log "You need to specify BORG_PASSPHRASE" error
+    exit
   fi
 
-  BORG_PASSPHRASE=$BORG_PASSPHRASE borg create /backup/$basename::$(date '+%d-%m-%Y_%H:%M:%S') $element
+  if [ -z $BORG_TARGET ]; then
+    log "You need to specify BORG_TARGET" error
+    exit
+  fi
 
-done
+  if [ -z $BORG_SOURCES ]; then
+    log "You need to specify BORG_SOURCES" error
+    exit
+  fi
 
-crond -L /dev/null -f
+  if [ -z $LFTP_TARGET ]; then
+    log "You need to specify LFTP_TARGET" error
+    exit
+  fi
+
+}
+
+function init {
+
+  log "Starting ..."
+
+  # Parse env var to get all sources
+  IFS=', ' read -r -a borg_sources <<< $BORG_SOURCES
+
+  # Loop over list of sources
+  for element in "${borg_sources[@]}"
+  do
+
+    # Extract directory name from path
+    basename=$(basename $element)
+
+    # Check if backup folder exist
+    if [ ! -d "/backup" ]; then
+
+      mkdir /backup
+
+    fi
+
+    # Check if the repository exists
+    if [ ! -d "/backup/$basename" ]; then
+
+      mkdir /backup/$basename
+
+      log "Init borg repository for $element"
+      BORG_PASSPHRASE=$BORG_PASSPHRASE borg init --encryption=repokey-blake2 /backup/$basename &> /dev/null
+
+      log "Create first backup for $element"
+      BORG_PASSPHRASE=$BORG_PASSPHRASE borg create /backup/$basename::$(date '+%d-%m-%Y_%H:%M:%S') $element
+
+    fi
+
+  done
+
+  log "Cron daemon started"
+
+  crond -L /dev/null -f
+
+}
+
+function backup {
+
+  # Parse env var to get all sources
+  IFS=', ' read -r -a borg_sources <<< $BORG_SOURCES
+
+  # Loop over list of sources
+  for element in "${borg_sources[@]}"
+  do
+
+    # Extract directory name from path
+    basename=$(basename $element)
+
+    log "Backup $element"
+    BORG_PASSPHRASE=$BORG_PASSPHRASE borg create /backup/$basename::$(date '+%d-%m-%Y_%H:%M:%S') $element
+
+  done
+
+  # Sync backup folder with LFTP
+  lftp ftp://auto:@$LFTP_TARGET -e "mirror -e -R $BORG_TARGET / ; quit" &> /dev/null
+
+  if [ ! $? ]; then
+    log "Syncronize backups with $LFTP_TARGET"
+  else
+    log "Impossible to synchronize backups with $LFTP_TARGET" error
+  fi
+
+}
+
+check_requirements
+
+if [ -z $1 ]; then
+  init
+else
+  backup
+fi
