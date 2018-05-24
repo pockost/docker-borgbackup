@@ -99,7 +99,7 @@ function backup {
   done
 
   # Sync backup folder with LFTP
-  if [ $(lftp ftp://auto:@$LFTP_TARGET -e "mirror -e -R $BORG_TARGET / ; quit" &> /dev/null) ]; then
+  if lftp ftp://auto:@$LFTP_TARGET -e "mirror -e -R $BORG_TARGET / ; quit" &> /dev/null; then
     log "Synchronize backups with $LFTP_TARGET"
   else
     log "Impossible to synchronize backups with $LFTP_TARGET" error
