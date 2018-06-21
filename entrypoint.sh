@@ -8,6 +8,38 @@ function log {
 
 }
 
+function alert {
+
+  if [ -n "$SLACK_WEBHOOK_URL" ]; then
+
+    if [ -n "$SLACK_ALERT_IDENTIFIER" ]; then
+
+      title="[$SLACK_ALERT_IDENTIFIER] - Backup failed"
+
+    else
+
+      title="Backup failed"
+
+    fi
+
+    if [ -z "$SLACK_ALERT_LINK" ]; then
+
+      attachments='[{"fallback": "The attachement isnt supported.", "title": "'$title'", "text": "'$1'", "color": "danger",}]'
+
+    else
+
+      attachments='[{"fallback": "The attachement isnt supported.", "title": "'$title'", "title_link": "'$SLACK_ALERT_LINK'", "text": "'$1'", "color": "danger",}]'
+
+    fi
+
+    payload='{"channel": "backup", "username": "Borgbackup", "attachments": '$attachments'}'
+
+    curl -X POST --data-urlencode "payload=$payload" $SLACK_WEBHOOK_URL &> /dev/null
+
+  fi
+
+}
+
 function check_requirements {
 
   if [ -z "$BORG_PASSPHRASE" ]; then
@@ -41,6 +73,13 @@ function init {
 
   log "Starting ..."
 
+  # Check if backup folder exist
+    if [ ! -d "$BORG_TARGET" ]; then
+
+      mkdir -p $BORG_TARGET
+
+    fi
+
   # Parse env var to get all sources
   IFS=', ' read -r -a borg_sources <<< $BORG_SOURCES
 
@@ -51,27 +90,31 @@ function init {
     # Extract directory name from path
     basename=$(basename $element)
 
-    # Check if backup folder exist
-    if [ ! -d "/backup" ]; then
-
-      mkdir /backup
-
-    fi
+    # Create backup repository path
+    repository_path="$BORG_TARGET/$basename"
 
     # Check if the repository exists
-    if [ ! -d "/backup/$basename" ]; then
+    if [ ! -d "$repository_path" ]; then
 
-      mkdir /backup/$basename
+      mkdir -p $repository_path
 
-      log "Init borg repository for $element"
-      BORG_PASSPHRASE=$BORG_PASSPHRASE borg init --encryption=repokey-blake2 /backup/$basename &> /dev/null
+      if BORG_PASSPHRASE=$BORG_PASSPHRASE borg init --encryption=repokey-blake2 $repository_path &> /dev/null; then
 
-      log "Create first backup for $element"
-      BORG_PASSPHRASE=$BORG_PASSPHRASE borg create /backup/$basename::$(date '+%d-%m-%Y_%H:%M:%S') $element
+        log "Init borg repository for $element"
+
+      else
+
+        message="An error occured when we try to initialize $element"
+        log "$message" error
+        alert "$message"
+
+      fi
 
     fi
 
   done
+
+  backup
 
   log "Setup cron tasks"
   echo "$CRON_DELAY entrypoint.sh backup" > /var/spool/cron/crontabs/root
@@ -93,16 +136,34 @@ function backup {
     # Extract directory name from path
     basename=$(basename $element)
 
-    log "Backup $element"
-    BORG_PASSPHRASE=$BORG_PASSPHRASE borg create /backup/$basename::$(date '+%d-%m-%Y_%H:%M:%S') $element
+    # Create backup repository path
+    repository_path="$BORG_TARGET/$basename"
+
+    if BORG_PASSPHRASE=$BORG_PASSPHRASE borg create $repository_path::$(date '+%d-%m-%Y_%H:%M:%S') $element; then
+
+      log "Backup $element"
+
+    else
+
+      message="An error occured when we try to backup $element"
+      log "$message" error
+      alert "$message"
+
+    fi
 
   done
 
   # Sync backup folder with LFTP
   if lftp ftp://auto:@$LFTP_TARGET -e "mirror -e -R $BORG_TARGET / ; quit" &> /dev/null; then
+
     log "Synchronize backups with $LFTP_TARGET"
+
   else
-    log "Impossible to synchronize backups with $LFTP_TARGET" error
+
+    message="An error occured when we try to synchronise $BORG_TARGET with $LFTP_TARGET"
+    log "$message" error
+    alert "$message"
+    
   fi
 
 }
