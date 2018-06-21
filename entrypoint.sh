@@ -24,11 +24,11 @@ function alert {
 
     if [ -z "$SLACK_ALERT_LINK" ]; then
 
-      attachments='[{"fallback": "The attachement isnt supported.", "title": "'$title'", "text": "'$1'", "color": "danger",}]'
+      attachments='[{"fallback": "'$1'", "title": "'$title'", "text": "'$1'", "color": "danger",}]'
 
     else
 
-      attachments='[{"fallback": "The attachement isnt supported.", "title": "'$title'", "title_link": "'$SLACK_ALERT_LINK'", "text": "'$1'", "color": "danger",}]'
+      attachments='[{"fallback": "'$1'", "title": "'$title'", "title_link": "'$SLACK_ALERT_LINK'", "text": "'$1'", "color": "danger",}]'
 
     fi
 
@@ -163,7 +163,7 @@ function backup {
     message="An error occured when we try to synchronise $BORG_TARGET with $LFTP_TARGET"
     log "$message" error
     alert "$message"
-    
+
   fi
 
 }
