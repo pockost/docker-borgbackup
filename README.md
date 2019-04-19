@@ -38,7 +38,7 @@ Required*: This variable specifies the folders that will be backup and and encry
 
 #### `LFTP_TARGET`
 
-Required*: This variable specifies the safe place where your `BORG_TARGET` folder will be mirrored.
+Optional*: This variable specifies the safe place where your `BORG_TARGET` folder will be mirrored. If not set no mirroring will be done.
 
 #### `CRON_DELAY`
 

@@ -58,8 +58,7 @@ function check_requirements {
   fi
 
   if [ -z "$LFTP_TARGET" ]; then
-    log "You need to specify LFTP_TARGET" error
-    exit
+    log "No LFTP_TARGET environment variable was specified. Backup will be local only" warning
   fi
 
   if [ -z "$CRON_DELAY" ]; then
@@ -154,16 +153,18 @@ function backup {
   done
 
   # Sync backup folder with LFTP
-  if lftp ftp://auto:@$LFTP_TARGET -e "mirror -e -R $BORG_TARGET / ; quit" &> /dev/null; then
+  if [ -n "$LFTP_TARGET" ]; then
+    if lftp ftp://auto:@$LFTP_TARGET -e "mirror -e -R $BORG_TARGET / ; quit" &> /dev/null; then
 
-    log "Synchronize backups with $LFTP_TARGET"
+      log "Synchronize backups with $LFTP_TARGET"
 
-  else
+    else
 
-    message="An error occured when we try to synchronise $BORG_TARGET with $LFTP_TARGET"
-    log "$message" error
-    alert "$message"
+      message="An error occured when we try to synchronise $BORG_TARGET with $LFTP_TARGET"
+      log "$message" error
+      alert "$message"
 
+    fi
   fi
 
 }
