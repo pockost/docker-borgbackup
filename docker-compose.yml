@@ -1,0 +1,15 @@
+version: '3.4'
+
+services:
+
+  borg:
+    container_name: docker-borgbackup-borg
+    build:
+      context: ./
+      dockerfile: dev.yml
+    volumes:
+      - ./:/script
+    working_dir: /script
+    entrypoint: /bin/bash -c "tail -f /dev/null"
+    env_file:
+      - .env
