@@ -13,6 +13,7 @@ slack_alert_link=${SLACK_ALERT_LINK}
 slack_webhook_url=${SLACK_WEBHOOK_URL}
 
 cron_delay=${CRON_DELAY}
+keep_within=${KEEP_WITHIN}
 
 function log {
 
@@ -107,7 +108,7 @@ function check_requirements {
 
     if [[ ${synchronisation_method} = "local" ]]; then
 
-      log "Synchronisation is setup to local. Backup will be local only"
+      log "Synchronisation is setup to local. Backup(s) will be local only"
 
     fi
 
@@ -147,7 +148,7 @@ function check_requirements {
 
     if [[ ${notification_method} = "log" ]]; then
 
-      log "Notification is setup to log"
+      log "Notification is setup to log. Error(s) will be only logged here"
 
     fi
 
@@ -155,6 +156,12 @@ function check_requirements {
 
     log "You need to specify NOTIFICATION_METHOD" error
     error=1
+
+  fi
+
+  if [[ -z ${keep_within} ]]; then
+
+    log "You don't specify KEEP_WITHIN. Backup(s) will never be pruned" warning
 
   fi
 
@@ -188,7 +195,7 @@ function init {
     basename=$(basename ${element})
 
     # Create backup repository path
-    repository_path=${borg_target}"/"${basename}
+    repository_path="${borg_target}/${basename}"
 
     # Check if the repository exists
     if [[ ! -d ${repository_path} ]]; then
@@ -213,7 +220,7 @@ function init {
   backup
 
   log "Setup cron tasks"
-  echo ${cron_delay}" entrypoint.sh backup" > /var/spool/cron/crontabs/root
+  echo "${cron_delay} entrypoint.sh backup" > /var/spool/cron/crontabs/root
 
   log "Start cron daemon"
   crond -L /dev/null -f
@@ -233,14 +240,14 @@ function backup {
     basename=$(basename ${element})
 
     # Create backup repository path
-    repository_path=${borg_target}"/"${basename}
+    repository_path="${borg_target}/${basename}"
 
     log "Backup "${element}
     BORG_PASSPHRASE=${borg_passphrase} borg create ${repository_path}::$(date '+%d-%m-%Y_%H:%M:%S') ${element}
 
     if [[ $? -ne 0 ]]; then
 
-      message="An error occurred when we try to backup "${element}
+      message="An error occurred when we try to backup ${element}"
       log "$message" error
       notify "$message"
 
@@ -251,12 +258,12 @@ function backup {
   # Sync backup folder with LFTP
   if [[ ${synchronisation_method} = "lftp" ]]; then
 
-    log "Synchronize backups with "${lftp_target}
-    lftp ftp://auto:@${lftp_target} -e "mirror -e -R "${borg_target}" / ; quit" &> /dev/null
+    log "Synchronize backups with ${lftp_target}"
+    lftp ftp://auto:@${lftp_target} -e "mirror -e -R ${borg_target} / ; quit" &> /dev/null
 
     if [[ $? -ne 0 ]]; then
 
-      message="An error occurred when we try to synchronise "${borg_target}" with "${lftp_target}
+      message="An error occurred when we try to synchronise ${borg_target} with ${lftp_target}"
       log "$message" error
       notify "$message"
 
@@ -264,12 +271,38 @@ function backup {
 
   fi
 
-}
+  # Prune old backups
+  if [[ -n ${keep_within} ]]; then
 
-check_requirements
+    for element in "${borg_sources[@]}"
+  	do
+
+    	# Extract directory name from path
+    	basename=$(basename ${element})
+
+    	# Create backup repository path
+    	repository_path="${borg_target}/${basename}"
+
+    	log "Prune ${element}"
+      borg prune --keep-within ${keep_within} ${repository_path}
+
+    	if [[ $? -ne 0 ]]; then
+
+      	message="An error occurred when we try to prune ${element}"
+      	log "$message" error
+      	notify "$message"
+
+    	fi
+
+  	done
+
+  fi
+
+}
 
 if [[ -z $1 ]]; then
 
+  check_requirements
   init
 
 else

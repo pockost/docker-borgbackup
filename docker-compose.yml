@@ -6,9 +6,10 @@ services:
     container_name: docker-borgbackup-borg
     build:
       context: ./
-      dockerfile: dev.yml
+      dockerfile: Dockerfile
     volumes:
       - ./:/script
+      - ./entrypoint.sh:/usr/local/bin/entrypoint.sh
     working_dir: /script
     entrypoint: /bin/bash -c "tail -f /dev/null"
     env_file:
