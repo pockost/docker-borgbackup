@@ -6,6 +6,7 @@ borg_sources=${BORG_SOURCES}
 
 synchronisation_method=${SYNCHRONISATION_METHOD,,}
 lftp_target=${LFTP_TARGET}
+ssh_host=${SSH_HOST}
 
 notification_method=${NOTIFICATION_METHOD,,}
 slack_alert_identifier=${SLACK_ALERT_IDENTIFIER}
@@ -92,6 +93,19 @@ function check_requirements {
   fi
 
   if [[ -n ${synchronisation_method} ]]; then
+
+    if [[ ${synchronisation_method} = "ssh" ]]; then
+
+      log "Synchronisation is setup to ssh"
+
+      if [[ -z ${ssh_host} ]]; then
+
+        log "You need to specify SSH_HOST" error
+	error=1
+
+      fi
+
+    fi
 
     if [[ ${synchronisation_method} = "lftp" ]]; then
 
@@ -197,19 +211,44 @@ function init {
     # Create backup repository path
     repository_path="${borg_target}/${basename}"
 
-    # Check if the repository exists
-    if [[ ! -d ${repository_path} ]]; then
+    if [[ ${synchronisation_method} = "local" ]] || [[ ${synchronisation_method} = "lftp" ]]; then
 
-      mkdir -p ${repository_path}
+      # Check if the repository exists
+      if [[ ! -d ${repository_path} ]]; then
 
-      log "Init borg repository for $element"
-      BORG_PASSPHRASE=${borg_passphrase} borg init --encryption=repokey-blake2 ${repository_path} &> /dev/null
+        mkdir -p ${repository_path}
 
-      if [[ $? -ne 0 ]]; then
+        log "Init borg repository for $element"
+        BORG_PASSPHRASE=${borg_passphrase} borg init --encryption=repokey-blake2 ${repository_path} &> /dev/null
 
-        message="An error occurred when we try to initialize $element"
-        log "$message" error
-        notify "$message"
+        if [[ $? -ne 0 ]]; then
+
+          message="An error occurred when we try to initialize $element"
+          log "$message" error
+          notify "$message"
+
+        fi
+
+      fi
+
+    fi
+
+    if [[ ${synchronisation_method} = "ssh" ]]; then
+
+      if ! ssh ${ssh_host} "ls ${repository_path}/backup > /dev/null 2>&1"; then
+
+        ssh ${ssh_host} "mkdir ${repository_path}/backup" 
+
+	log "Init borg repository for $element"
+        BORG_PASSPHRASE=${borg_passphrase} borg init --encryption=repokey-blake2 ${ssh_host}:${repository_path}/backup &> /dev/null
+
+	if [[ $? -ne 0 ]]; then
+
+          message="An error occurred when we try to initialize $element"
+          log "$message" error
+          notify "$message"
+
+        fi
 
       fi
 
@@ -242,14 +281,33 @@ function backup {
     # Create backup repository path
     repository_path="${borg_target}/${basename}"
 
-    log "Backup "${element}
-    BORG_PASSPHRASE=${borg_passphrase} borg create ${repository_path}::$(date '+%d-%m-%Y_%H:%M:%S') ${element}
+    if [[ ${synchronisation_method} = "local" ]] || [[ ${synchronisation_method} = "lftp" ]]; then
 
-    if [[ $? -ne 0 ]]; then
+      log "Backup "${element}
+      BORG_PASSPHRASE=${borg_passphrase} borg create ${repository_path}::$(date '+%d-%m-%Y_%H:%M:%S') ${element}
 
-      message="An error occurred when we try to backup ${element}"
-      log "$message" error
-      notify "$message"
+      if [[ $? -ne 0 ]]; then
+
+        message="An error occurred when we try to backup ${element}"
+        log "$message" error
+        notify "$message"
+
+      fi
+
+    fi
+
+    if [[ ${synchronisation_method} = "ssh" ]]; then
+      
+      log "Backup "${element}
+      BORG_PASSPHRASE=${borg_passphrase} borg create ${ssh_host}:${repository_path}/backup::$(date '+%d-%m-%Y_%H:%M:%S') ${element}
+
+      if [[ $? -ne 0 ]]; then
+
+        message="An error occurred when we try to backup ${element}"
+        log "$message" error
+        notify "$message"
+
+      fi
 
     fi
 
@@ -275,26 +333,45 @@ function backup {
   if [[ -n ${keep_within} ]]; then
 
     for element in "${borg_sources[@]}"
-  	do
+    do
 
-    	# Extract directory name from path
-    	basename=$(basename ${element})
+      # Extract directory name from path
+      basename=$(basename ${element})
 
-    	# Create backup repository path
-    	repository_path="${borg_target}/${basename}"
+      # Create backup repository path
+      repository_path="${borg_target}/${basename}"
 
-    	log "Prune ${element}"
-      borg prune --keep-within ${keep_within} ${repository_path}
+      if [[ ${synchronisation_method} = "local" ]] || [[ ${synchronisation_method} = "lftp" ]]; then
+
+        log "Prune ${element}"
+        borg prune --keep-within ${keep_within} ${repository_path}
 
     	if [[ $? -ne 0 ]]; then
 
-      	message="An error occurred when we try to prune ${element}"
-      	log "$message" error
-      	notify "$message"
+      	  message="An error occurred when we try to prune ${element}"
+      	  log "$message" error
+      	  notify "$message"
+
+    	fi
+	
+      fi
+
+      if [[ ${synchronisation_method} = "ssh" ]]; then
+
+        log "Prune ${element}"
+        borg prune --keep-within ${keep_within} ${ssh_host}:${repository_path}/backup
+
+    	if [[ $? -ne 0 ]]; then
+
+      	  message="An error occurred when we try to prune ${element}"
+      	  log "$message" error
+      	  notify "$message"
 
     	fi
 
-  	done
+      fi
+
+    done
 
   fi
 

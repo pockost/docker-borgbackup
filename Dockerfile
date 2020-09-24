@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM alpine:3.9
 
 RUN apk upgrade --no-cache \
     && apk add --no-cache \
@@ -12,6 +12,7 @@ RUN apk upgrade --no-cache \
        lz4-dev \
        acl-dev \
        linux-headers \
+       openssh-client \
     && chmod 0600 /var/spool/cron/crontabs/root \
     && sed -i 's/\/root:\/bin\/ash/\/root:\/bin\/bash/g' /etc/passwd \
     && touch /var/log/backup.log \
