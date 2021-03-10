@@ -7,6 +7,7 @@ borg_sources=${BORG_SOURCES}
 synchronisation_method=${SYNCHRONISATION_METHOD,,}
 lftp_target=${LFTP_TARGET}
 ssh_host=${SSH_HOST}
+repository_name=${REPOSITORY_NAME}
 
 notification_method=${NOTIFICATION_METHOD,,}
 slack_alert_identifier=${SLACK_ALERT_IDENTIFIER}
@@ -101,7 +102,7 @@ function check_requirements {
       if [[ -z ${ssh_host} ]]; then
 
         log "You need to specify SSH_HOST" error
-	error=1
+	      error=1
 
       fi
 
@@ -130,6 +131,13 @@ function check_requirements {
 
     log "You need to specify SYNCHRONISATION_METHOD" error
     error=1
+
+  fi
+
+  if [[ -z ${repository_name} ]]; then
+
+    repository_name="backup"
+    log "You don't specify REPOSITORY_NAME. Repository name will be 'backup'" warning
 
   fi
 
@@ -235,12 +243,12 @@ function init {
 
     if [[ ${synchronisation_method} = "ssh" ]]; then
 
-      if ! ssh ${ssh_host} "ls ${repository_path}/backup > /dev/null 2>&1"; then
+      if ! ssh ${ssh_host} "ls ${repository_path}/${repository_name} > /dev/null 2>&1"; then
 
-        ssh ${ssh_host} "mkdir ${repository_path}/backup" 
+        ssh ${ssh_host} "mkdir ${repository_path}/${repository_name}" 
 
 	log "Init borg repository for $element"
-        BORG_PASSPHRASE=${borg_passphrase} borg init --encryption=repokey-blake2 ${ssh_host}:${repository_path}/backup &> /dev/null
+        BORG_PASSPHRASE=${borg_passphrase} borg init --encryption=repokey-blake2 ${ssh_host}:${repository_path}/${repository_name} &> /dev/null
 
 	if [[ $? -ne 0 ]]; then
 
@@ -299,7 +307,7 @@ function backup {
     if [[ ${synchronisation_method} = "ssh" ]]; then
       
       log "Backup "${element}
-      BORG_PASSPHRASE=${borg_passphrase} borg create ${ssh_host}:${repository_path}/backup::$(date '+%d-%m-%Y_%H:%M:%S') ${element}
+      BORG_PASSPHRASE=${borg_passphrase} borg create ${ssh_host}:${repository_path}/${repository_name}::$(date '+%d-%m-%Y_%H:%M:%S') ${element}
 
       if [[ $? -ne 0 ]]; then
 
@@ -359,7 +367,7 @@ function backup {
       if [[ ${synchronisation_method} = "ssh" ]]; then
 
         log "Prune ${element}"
-        borg prune --keep-within ${keep_within} ${ssh_host}:${repository_path}/backup
+        borg prune --keep-within ${keep_within} ${ssh_host}:${repository_path}/${repository_name}
 
     	if [[ $? -ne 0 ]]; then
 
